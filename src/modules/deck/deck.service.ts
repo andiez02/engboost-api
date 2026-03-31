@@ -174,13 +174,14 @@ export class DeckService {
       is_public: false,
     });
 
-    // 5. Bulk insert
+    // 5. Bulk insert - map AI response to new schema
     const now = new Date();
     await Flashcard.bulkCreate(
       vocab.map((v, i) => ({
         english: v.word,
         vietnamese: v.meaning_vi,
-        object: v.example,
+        example: v.example, // Map AI example to example field
+        pos: null, // AI doesn't provide POS in current implementation
         image_url: imageUrls[i] ?? null,
         folder_id: folder.id,
         user_id: userId,
@@ -190,6 +191,7 @@ export class DeckService {
         interval: 0,
         ease_factor: 2.5,
         last_reviewed_at: null,
+        // Note: object field is NOT written for new flashcards
       })),
       { returning: false }
     );
