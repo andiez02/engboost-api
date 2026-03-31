@@ -18,5 +18,7 @@ export const verifySchema = z.object({
 
 export const updateUserSchema = z.object({
   username: z.string().max(100).optional(),
-  avatar: z.string().url().nullable().optional(),
-}).strict();
+  avatar: z.string().nullable().optional(),
+  current_password: z.string().optional(),
+  new_password: z.string().optional(),
+});

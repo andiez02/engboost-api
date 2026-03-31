@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import cloudinary from '../../config/cloudinary';
 import { User } from '../../models';
 import { ApiError } from '../../utils/ApiError';
 import { JwtProvider } from '../../utils/jwtProvider';
@@ -120,17 +121,76 @@ export class UserService {
   }
 
   /**
-   * Update user
+   * Get all achievements for a user (unlocked + locked)
    */
-  async update(userId: string, updateData: { username?: string; avatar?: string | null }) {
+  async getAchievements(userId: string) {
+    const { Achievement, UserAchievement } = await import('../../models');
+
+    const [allAchievements, userAchievements] = await Promise.all([
+      Achievement.findAll({ order: [['created_at', 'ASC']] }),
+      UserAchievement.findAll({ where: { user_id: userId } }),
+    ]);
+
+    const unlockedMap = new Map(
+      userAchievements.map((ua) => [ua.achievement_id, ua.unlocked_at])
+    );
+
+    return allAchievements.map((a) => ({
+      id: a.id,
+      key: a.key,
+      title: a.title,
+      description: a.description,
+      icon: a.icon,
+      unlocked: unlockedMap.has(a.id),
+      unlocked_at: unlockedMap.get(a.id) ?? null,
+    }));
+  }
+
+  async update(
+    userId: string,
+    updateData: {
+      username?: string;
+      avatar?: string | null;
+      current_password?: string;
+      new_password?: string;
+    },
+    avatarFile?: Express.Multer.File
+  ) {
     const user = await User.findByPk(userId);
-    if (!user) {
-      throw new ApiError(404, 'User not found.');
+    if (!user) throw new ApiError(404, 'User not found.');
+
+    const changes: Record<string, unknown> = {};
+
+    // Username update
+    if (updateData.username !== undefined) {
+      changes.username = updateData.username;
     }
 
-    await user.update(updateData);
+    // Avatar upload via Cloudinary
+    if (avatarFile) {
+      const b64 = Buffer.from(avatarFile.buffer).toString('base64');
+      const dataUri = `data:${avatarFile.mimetype};base64,${b64}`;
+      const result = await cloudinary.uploader.upload(dataUri, {
+        folder: 'engboost/avatars',
+        transformation: [{ width: 200, height: 200, crop: 'fill' }],
+      });
+      changes.avatar = result.secure_url;
+    } else if (updateData.avatar !== undefined) {
+      changes.avatar = updateData.avatar;
+    }
 
-    // Return without sensitive fields
+    // Password change
+    if (updateData.new_password) {
+      if (!updateData.current_password) {
+        throw new ApiError(400, 'Current password is required.');
+      }
+      const isValid = await bcrypt.compare(updateData.current_password, user.password);
+      if (!isValid) throw new ApiError(400, 'Current password is incorrect.');
+      changes.password = await bcrypt.hash(updateData.new_password, SALT_ROUNDS);
+    }
+
+    await user.update(changes);
+
     const { password, verify_token, ...safeUser } = user.toJSON();
     return safeUser;
   }

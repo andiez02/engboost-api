@@ -15,6 +15,11 @@ import folderRoutes from './modules/folder/folder.route';
 import flashcardRoutes from './modules/flashcard/flashcard.route';
 import courseRoutes from './modules/course/course.route';
 import snaplangRoutes from './modules/snaplang/snaplang.route';
+import studyRoutes from './modules/study/study.route';
+import deckRoutes from './modules/deck/deck.route';
+import postRoutes from './modules/post/post.route';
+import exploreRoutes from './modules/explore/explore.route';
+import adminFolderRoutes from './modules/adminFolder/adminFolder.route';
 
 const app = express();
 
@@ -47,6 +52,11 @@ app.use('/api/folders', folderRoutes);
 app.use('/api/flashcards', flashcardRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/snaplang', snaplangRoutes);
+app.use('/api/study', studyRoutes);
+app.use('/api/decks', deckRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/explore', exploreRoutes);
+app.use('/api/admin/folders', adminFolderRoutes);
 
 // ==================== Error Handler  ====================
 app.use(errorHandler);
@@ -63,6 +73,16 @@ const startServer = async () => {
       await sequelize.sync({ alter: false });
       console.log('✅ Database models synced.');
     }
+
+    // Seed achievements (upsert — safe to run every boot)
+    const { achievementService } = await import('./modules/gamification/achievement.service');
+    await achievementService.seedAchievements();
+    console.log('✅ Achievements seeded.');
+
+    // Seed challenges (upsert — safe to run every boot)
+    const { challengeService } = await import('./modules/gamification/challenge.service');
+    await challengeService.seedChallenges();
+    console.log('✅ Challenges seeded.');
 
     const host = isProduction ? '0.0.0.0' : env.APP_HOST;
     const port = isProduction ? parseInt(process.env.PORT || '10000', 10) : env.APP_PORT;

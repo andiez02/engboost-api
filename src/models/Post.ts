@@ -1,44 +1,36 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/sequelize';
 
-interface FolderAttributes {
+interface PostAttributes {
   id: string;
-  title: string;
   user_id: string;
-  flashcard_count: number;
-  is_public: boolean;
-  required_level: number;
+  folder_id: string;
+  content: string | null;
+  like_count: number;
+  save_count: number;
   created_at: Date;
   updated_at: Date | null;
 }
 
-interface FolderCreationAttributes extends Optional<FolderAttributes, 'id' | 'flashcard_count' | 'is_public' | 'required_level' | 'created_at' | 'updated_at'> {}
+interface PostCreationAttributes extends Optional<PostAttributes, 'id' | 'content' | 'like_count' | 'save_count' | 'created_at' | 'updated_at'> {}
 
-class Folder extends Model<FolderAttributes, FolderCreationAttributes> implements FolderAttributes {
+class Post extends Model<PostAttributes, PostCreationAttributes> implements PostAttributes {
   declare id: string;
-  declare title: string;
   declare user_id: string;
-  declare flashcard_count: number;
-  declare is_public: boolean;
-  declare required_level: number;
+  declare folder_id: string;
+  declare content: string | null;
+  declare like_count: number;
+  declare save_count: number;
   declare created_at: Date;
   declare updated_at: Date | null;
 }
 
-Folder.init(
+Post.init(
   {
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
-    },
-    title: {
-      type: DataTypes.STRING(30),
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [1, 30],
-      },
     },
     user_id: {
       type: DataTypes.UUID,
@@ -49,20 +41,28 @@ Folder.init(
       },
       onDelete: 'CASCADE',
     },
-    flashcard_count: {
+    folder_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: 'folders',
+        key: 'id',
+      },
+      onDelete: 'CASCADE',
+    },
+    content: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    like_count: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
     },
-    is_public: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
-    },
-    required_level: {
+    save_count: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 1,
+      defaultValue: 0,
     },
     created_at: {
       type: DataTypes.DATE,
@@ -76,19 +76,17 @@ Folder.init(
   },
   {
     sequelize,
-    tableName: 'folders',
+    tableName: 'posts',
     timestamps: true,
     underscored: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     indexes: [
-      {
-        unique: true,
-        fields: ['title', 'user_id'],
-        name: 'folders_title_user_id_unique',
-      },
+      { fields: ['user_id'] },
+      { fields: ['folder_id'] },
+      { fields: ['created_at'] },
     ],
   }
 );
 
-export default Folder;
+export default Post;

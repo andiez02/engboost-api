@@ -11,7 +11,9 @@
     "db:migrate:undo": "npx sequelize-cli db:migrate:undo",
     "db:migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
     "db:seed": "npx sequelize-cli db:seed:all",
-    "db:seed:undo": "npx sequelize-cli db:seed:undo:all"
+    "db:seed:undo": "npx sequelize-cli db:seed:undo:all",
+    "test": "vitest --run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "axios": "^1.13.6",
@@ -19,6 +21,7 @@
     "cloudinary": "^2.5.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "form-data": "^4.0.5",
@@ -40,8 +43,11 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.5",
     "@types/uuid": "^10.0.0",
+    "@vitest/coverage-v8": "^4.1.1",
+    "fast-check": "^4.6.0",
     "sequelize-cli": "^6.6.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.1"
   }
 }

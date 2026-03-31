@@ -46,3 +46,23 @@ export const deleteFlashcard = async (req: AuthenticatedRequest, res: Response, 
     next(error);
   }
 };
+
+export const reviewFlashcard = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { rating } = req.body;
+    const flashcard = await flashcardService.reviewFlashcard(req.params.id as string, req.user!.id, rating);
+    res.status(200).json({ success: true, data: flashcard });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getDueCards = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const folderId = req.query.folderId as string | undefined;
+    const flashcards = await flashcardService.getDueCards(req.user!.id, folderId);
+    res.status(200).json({ success: true, data: flashcards });
+  } catch (error) {
+    next(error);
+  }
+};

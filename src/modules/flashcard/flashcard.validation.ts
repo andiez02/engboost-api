@@ -26,3 +26,7 @@ export const saveToFolderSchema = z.object({
     path: ['folder_id'],
   }
 );
+
+export const reviewSchema = z.object({
+  rating: z.number().int().min(0).max(3),
+});

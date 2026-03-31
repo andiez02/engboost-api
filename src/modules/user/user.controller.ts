@@ -1,10 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { userService } from './user.service';
 import { AuthenticatedRequest } from '../../types';
 import { isProduction } from '../../config/environment';
 import { JwtProvider } from '../../utils/jwtProvider';
 import { env } from '../../config/environment';
 import { User } from '../../models';
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -94,9 +97,19 @@ export const getMe = async (req: AuthenticatedRequest, res: Response, next: Next
   }
 };
 
+export const getAchievements = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const achievements = await userService.getAchievements(req.user!.id);
+    res.status(200).json({ success: true, data: achievements });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const update = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const result = await userService.update(req.user!.id, req.body);
+    const avatarFile = (req as any).file as Express.Multer.File | undefined;
+    const result = await userService.update(req.user!.id, req.body, avatarFile);
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
