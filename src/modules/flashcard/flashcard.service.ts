@@ -3,8 +3,6 @@ import { Flashcard, Folder } from '../../models';
 import { ApiError } from '../../utils/ApiError';
 import { updateSpacedRepetition } from '../../utils/srsEngine';
 import { folderService } from '../folder/folder.service';
-import { normalizeFlashcardInput } from '../../utils/flashcardNormalizer';
-import { CreateFlashcardDTO } from '../../types/flashcard.types';
 
 interface FlashcardInput {
   english: string;
@@ -50,20 +48,15 @@ export class FlashcardService {
       targetFolderId = folderId;
     }
 
-    // Normalize all inputs
-    const normalizedFlashcards: CreateFlashcardDTO[] = flashcards.map(normalizeFlashcardInput);
-
-    // Prepare bulk insert data - map DTO to database columns
-    const flashcardData = normalizedFlashcards.map((dto) => ({
-      english: dto.headword,
-      vietnamese: dto.translation,
-      pos: dto.pos || null,
-      example: dto.example || null,
-      image_url: dto.imageUrl || null,
+    // Prepare bulk insert data
+    const flashcardData = flashcards.map((fc) => ({
+      english: fc.english,
+      vietnamese: fc.vietnamese,
+      object: fc.object || null,
+      image_url: fc.image_url || null,
       folder_id: targetFolderId,
       user_id: userId,
       is_public: folder.is_public,
-      // Note: object field is NOT written for new flashcards
     }));
 
     const created = await Flashcard.bulkCreate(flashcardData);

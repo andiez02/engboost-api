@@ -5,7 +5,6 @@ interface FlashcardAttributes {
   id: string;
   english: string;
   vietnamese: string;
-  /** @deprecated Use pos and example fields instead */
   object: string | null;
   image_url: string | null;
   folder_id: string;
@@ -13,11 +12,6 @@ interface FlashcardAttributes {
   is_public: boolean;
   created_at: Date;
   updated_at: Date | null;
-
-  /** Part of speech (e.g., "noun", "verb", "adjective") */
-  pos: string | null;
-  /** Example sentence demonstrating usage */
-  example: string | null;
 
   /** Spaced Repetition System (SRS) fields */ 
   repetition: number;
@@ -30,13 +24,12 @@ interface FlashcardAttributes {
   learning_step: number;
 }
 
-interface FlashcardCreationAttributes extends Optional<FlashcardAttributes, 'id' | 'object' | 'image_url' | 'is_public' | 'created_at' | 'updated_at' | 'pos' | 'example' | 'repetition' | 'interval' | 'ease_factor' | 'next_review_at' | 'last_reviewed_at' | 'is_learning' | 'learning_step'> {}
+interface FlashcardCreationAttributes extends Optional<FlashcardAttributes, 'id' | 'object' | 'image_url' | 'is_public' | 'created_at' | 'updated_at' | 'repetition' | 'interval' | 'ease_factor' | 'next_review_at' | 'last_reviewed_at' | 'is_learning' | 'learning_step'> {}
 
 class Flashcard extends Model<FlashcardAttributes, FlashcardCreationAttributes> implements FlashcardAttributes {
   declare id: string;
   declare english: string;
   declare vietnamese: string;
-  /** @deprecated Use pos and example fields instead */
   declare object: string | null;
   declare image_url: string | null;
   declare folder_id: string;
@@ -44,8 +37,6 @@ class Flashcard extends Model<FlashcardAttributes, FlashcardCreationAttributes> 
   declare is_public: boolean;
   declare created_at: Date;
   declare updated_at: Date | null;
-  declare pos: string | null;
-  declare example: string | null;
   declare repetition: number;
   declare interval: number;
   declare ease_factor: number;
@@ -80,14 +71,6 @@ Flashcard.init(
     },
     object: {
       type: DataTypes.STRING(200),
-      allowNull: true,
-    },
-    pos: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-    },
-    example: {
-      type: DataTypes.TEXT,
       allowNull: true,
     },
     image_url: {
