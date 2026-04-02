@@ -4,9 +4,13 @@ import sequelize from '../config/sequelize';
 interface FlashcardAttributes {
   id: string;
   english: string;
-  vietnamese: string;
-  object: string | null;
+  vietnamese: string | null;
+  pos: string | null;
+  example: string | null;
+  definition: string | null;
+  senses: any; // Required JSONB array
   image_url: string | null;
+  lexical_entry_id?: string | null;
   folder_id: string;
   user_id: string;
   is_public: boolean;
@@ -24,14 +28,25 @@ interface FlashcardAttributes {
   learning_step: number;
 }
 
-interface FlashcardCreationAttributes extends Optional<FlashcardAttributes, 'id' | 'object' | 'image_url' | 'is_public' | 'created_at' | 'updated_at' | 'repetition' | 'interval' | 'ease_factor' | 'next_review_at' | 'last_reviewed_at' | 'is_learning' | 'learning_step'> {}
+interface FlashcardCreationAttributes extends Optional<FlashcardAttributes, 'id' | 'pos' | 'example' | 'definition' | 'vietnamese' | 'image_url' | 'lexical_entry_id' | 'is_public' | 'created_at' | 'updated_at' | 'repetition' | 'interval' | 'ease_factor' | 'next_review_at' | 'last_reviewed_at' | 'is_learning' | 'learning_step'> {}
 
 class Flashcard extends Model<FlashcardAttributes, FlashcardCreationAttributes> implements FlashcardAttributes {
   declare id: string;
+  /** @deprecated Phase 3 — use LexicalEntry.headword via association */
   declare english: string;
-  declare vietnamese: string;
-  declare object: string | null;
+  /** @deprecated Phase 3 — use LexicalEntry.senses[].translation via association */
+  declare vietnamese: string | null;
+  /** @deprecated Phase 3 — use LexicalEntry.pos via association */
+  declare pos: string | null;
+  /** @deprecated Phase 3 — use LexicalEntry.senses[].examples via association */
+  declare example: string | null;
+  /** @deprecated Phase 3 — use LexicalEntry.senses[].definition via association */
+  declare definition: string | null;
+  /** @deprecated Phase 3 — use LexicalEntry.senses via association */
+  declare senses: any;
+  /** @deprecated Phase 3 — use LexicalEntry.image_url via association */
   declare image_url: string | null;
+  declare lexical_entry_id: string | null;
   declare folder_id: string;
   declare user_id: string;
   declare is_public: boolean;
@@ -63,19 +78,40 @@ Flashcard.init(
     },
     vietnamese: {
       type: DataTypes.STRING(200),
-      allowNull: false,
+      allowNull: true,
       validate: {
         notEmpty: true,
         len: [1, 200],
       },
     },
-    object: {
-      type: DataTypes.STRING(200),
+    pos: {
+      type: DataTypes.STRING(50),
       allowNull: true,
+    },
+    example: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    definition: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    senses: {
+      type: DataTypes.JSONB,
+      allowNull: false,
     },
     image_url: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    lexical_entry_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: 'lexical_entries',
+        key: 'id',
+      },
+      onDelete: 'SET NULL',
     },
     folder_id: {
       type: DataTypes.UUID,
@@ -152,6 +188,7 @@ Flashcard.init(
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     indexes: [
+      { fields: ['lexical_entry_id'] },
       { fields: ['folder_id'] },
       { fields: ['user_id'] },
     ],

@@ -52,7 +52,11 @@ export class ExploreService {
           flashcards.map((fc) => ({
             english: fc.english,
             vietnamese: fc.vietnamese,
-            object: fc.object,
+            pos: fc.pos,
+            example: fc.example,
+            definition: fc.definition,
+            senses: fc.senses,
+            lexical_entry_id: fc.lexical_entry_id,
             image_url: fc.image_url,
             folder_id: cloned.id,
             user_id: userId,

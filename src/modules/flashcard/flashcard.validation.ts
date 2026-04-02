@@ -1,10 +1,21 @@
 import { z } from 'zod';
 
+const exampleSchema = z.object({
+  sentence: z.string().trim().min(1, 'Example sentence is required'),
+  translation: z.string().trim().optional(),
+});
+
+const senseSchema = z.object({
+  definition: z.string().trim().min(1, 'Definition is required'),
+  translation: z.string().trim().min(1, 'Translation is required'),
+  examples: z.array(exampleSchema).default([]),
+});
+
 const flashcardItemSchema = z.object({
-  english: z.string().min(1, 'English is required').max(200),
-  vietnamese: z.string().min(1, 'Vietnamese is required').max(200),
-  object: z.string().max(200).nullable().optional(),
+  headword: z.string().trim().min(1, 'Headword is required').max(200),
+  pos: z.string().trim().max(200).nullable().optional(),
   image_url: z.string().url().nullable().optional(),
+  senses: z.array(senseSchema).min(1, 'At least one sense is required'),
 });
 
 export const saveToFolderSchema = z.object({

@@ -2,6 +2,8 @@ import axios from 'axios';
 import sequelize from '../../config/sequelize';
 import { Flashcard, Folder } from '../../models';
 import { ApiError } from '../../utils/ApiError';
+import { SensesSchema } from '../flashcard/flashcard.utils';
+import { lexicalRepository } from '../lexical/lexical.repository';
 
 const GEMINI_API_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
@@ -9,9 +11,13 @@ const GEMINI_API_URL =
 const PEXELS_API_URL = 'https://api.pexels.com/v1/search';
 
 interface VocabItem {
-  word: string;
-  meaning_vi: string;
-  example: string;
+  headword: string;
+  pos: string;
+  senses: {
+    definition: string;
+    translation: string;
+    examples: { sentence: string }[];
+  }[];
 }
 
 // ─── AI Prompt ────────────────────────────────────────────────────────────────
@@ -20,12 +26,31 @@ function buildPrompt(topic: string, level: string, count: number): string {
   return `You are an English vocabulary teacher. Generate exactly ${count} unique English vocabulary words for the topic "${topic}" at ${level} level.
 
 Return ONLY a valid JSON array with no markdown, no explanation, no code block. Each item must have:
-- "word": the English word or short phrase
-- "meaning_vi": the Vietnamese translation (concise, 1-5 words)
-- "example": one natural English example sentence using the word
+- "headword": the English word or short phrase
+- "pos": the part of speech (e.g., noun, verb, adjective)
+- "senses": an array of meanings. Each meaning has:
+  - "definition": the English definition
+  - "translation": the Vietnamese translation
+  - "examples": an array of example objects, each containing a "sentence" string
 
 Example format:
-[{"word":"apple","meaning_vi":"quả táo","example":"She ate a red apple for breakfast."}]
+[
+  {
+    "headword": "salary",
+    "pos": "noun",
+    "senses": [
+      {
+        "definition": "a fixed regular payment",
+        "translation": "tiền lương",
+        "examples": [
+          {
+            "sentence": "My salary is paid monthly."
+          }
+        ]
+      }
+    ]
+  }
+]
 
 Rules:
 - Exactly ${count} items
@@ -55,20 +80,21 @@ function parseVocab(raw: string, count: number): VocabItem[] {
   const valid: VocabItem[] = [];
 
   for (const item of parsed) {
+    const sensesValidation = SensesSchema.safeParse(item?.senses);
+
     if (
-      typeof item?.word === 'string' &&
-      typeof item?.meaning_vi === 'string' &&
-      typeof item?.example === 'string' &&
-      item.word.trim() &&
-      item.meaning_vi.trim()
+      typeof item?.headword === 'string' &&
+      typeof item?.pos === 'string' &&
+      sensesValidation.success &&
+      item.headword.trim()
     ) {
-      const key = item.word.trim().toLowerCase();
+      const key = item.headword.trim().toLowerCase();
       if (!seen.has(key)) {
         seen.add(key);
         valid.push({
-          word: item.word.trim(),
-          meaning_vi: item.meaning_vi.trim(),
-          example: item.example.trim(),
+          headword: item.headword.trim(),
+          pos: item.pos.trim(),
+          senses: sensesValidation.data,
         });
       }
     }
@@ -162,7 +188,7 @@ export class DeckService {
 
     // 3. Fetch images in parallel (best-effort — null if Pexels key missing or request fails)
     const imageUrls = await Promise.all(
-      vocab.map((v) => fetchImageUrl(v.word))
+      vocab.map((v) => fetchImageUrl(v.headword))
     );
 
     // 4. Create folder with timestamp suffix to avoid unique(title, user_id) conflicts
@@ -174,15 +200,37 @@ export class DeckService {
       is_public: false,
     });
 
-    // 5. Bulk insert
+    // 5. Bulk save LexicalEntries globally
+    const lexicalEntryIds = await Promise.all(
+      vocab.map((v, i) =>
+        lexicalRepository.upsertLexicalEntry({
+          headword: v.headword,
+          pos: v.pos,
+          senses: v.senses,
+          imageUrl: imageUrls[i] ?? null,
+        })
+      )
+    );
+
+    // 6. Bulk insert user references
     const now = new Date();
     await Flashcard.bulkCreate(
-      vocab.map((v, i) => ({
-        english: v.word,
-        vietnamese: v.meaning_vi,
-        object: v.example,
-        image_url: imageUrls[i] ?? null,
-        folder_id: folder.id,
+      vocab.map((v, i) => {
+        const primarySense = v.senses[0] || {};
+        const primaryDefinition = primarySense.definition || null;
+        const primaryTranslation = primarySense.translation || '—';
+        const primaryExample = primarySense.examples?.[0]?.sentence || null;
+
+        return {
+          english: v.headword,
+          vietnamese: primaryTranslation,
+          definition: primaryDefinition,
+          example: primaryExample,
+          pos: v.pos,
+          senses: v.senses, // Phase 3.1 Dual-write
+          lexical_entry_id: lexicalEntryIds[i],
+          image_url: imageUrls[i] ?? null,
+          folder_id: folder.id,
         user_id: userId,
         is_public: false,
         next_review_at: now,
@@ -190,11 +238,12 @@ export class DeckService {
         interval: 0,
         ease_factor: 2.5,
         last_reviewed_at: null,
-      })),
+        };
+      }),
       { returning: false }
     );
 
-    // 6. Update folder flashcard count
+    // 7. Update folder flashcard count
     await sequelize.query(
       'UPDATE folders SET flashcard_count = :count, updated_at = NOW() WHERE id = :id',
       { replacements: { count: vocab.length, id: folder.id } }

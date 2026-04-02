@@ -1,31 +1,34 @@
 import { Op } from 'sequelize';
 import { startOfDay, isSameDay, differenceInDays } from 'date-fns';
-import { Flashcard, User, ReviewLog } from '../../models';
+import { Flashcard, User, ReviewLog, LexicalEntry } from '../../models';
 import { ApiError } from '../../utils/ApiError';
 import { processLearningStep, LEARNING_STEPS } from '../../utils/srsEngine';
 import { achievementService } from '../gamification/achievement.service';
 import { xpService, xpForLevel, calculateLevel } from '../gamification/xp.service';
 import { challengeService } from '../gamification/challenge.service';
+import { toFlashcardResponse, toFlashcardResponseList, FlashcardResponse } from '../flashcard/flashcard.mapper';
 
 export class StudyService {
   /** GET /study — due cards for a user, optionally filtered by folder */
-  async getDueCards(userId: string, folderId?: string): Promise<Flashcard[]> {
+  async getDueCards(userId: string, folderId?: string): Promise<FlashcardResponse[]> {
     const where: Record<string, unknown> = {
       user_id: userId,
       next_review_at: { [Op.lte]: new Date() },
     };
     if (folderId) where.folder_id = folderId;
 
-    return Flashcard.findAll({
+    const cards = await Flashcard.findAll({
       where,
       order: [['next_review_at', 'ASC']],
+      include: [{ model: LexicalEntry, as: 'lexicalEntry' }],
       limit: 20,
     });
+    return toFlashcardResponseList(cards);
   }
 
   /** POST /review — apply learning step / SM-2 rating and persist */
   async reviewCard(cardId: string, userId: string, rating: 0 | 1 | 2 | 3): Promise<{
-    card: Flashcard;
+    card: FlashcardResponse;
     unlockedAchievements: any[];
     xpGained: number;
     leveledUp: boolean;
@@ -104,8 +107,14 @@ export class StudyService {
     card.last_reviewed_at = result.last_reviewed_at;
 
     await card.save();
+
+    // Re-fetch with LexicalEntry for clean response
+    const updatedCard = await Flashcard.findByPk(cardId, {
+      include: [{ model: LexicalEntry, as: 'lexicalEntry' }]
+    });
+
     return {
-      card,
+      card: toFlashcardResponse(updatedCard!),
       unlockedAchievements,
       xpGained: xpResult.xpGained,
       leveledUp: xpResult.leveledUp,
@@ -186,10 +195,10 @@ export class StudyService {
     userId: string,
     folderId?: string
   ): Promise<{
-    learning: Flashcard[];
-    overdue: Flashcard[];
-    due: Flashcard[];
-    newCards: Flashcard[];
+    learning: FlashcardResponse[];
+    overdue: FlashcardResponse[];
+    due: FlashcardResponse[];
+    newCards: FlashcardResponse[];
     stats: { due: number; overdueCount: number; dueTodayCount: number; reviewedToday: number; streak: number; dailyGoal: number; xp: number; level: number; xpForNextLevel: number; xpForCurrentLevel: number; challenges: any[] };
     nextReviewAt: Date | null;
   }> {
@@ -209,6 +218,7 @@ export class StudyService {
           next_review_at: { [Op.lte]: now },
         },
         order: [['next_review_at', 'ASC']],
+        include: [{ model: LexicalEntry, as: 'lexicalEntry' }],
         limit: 20,
       }),
 
@@ -221,6 +231,7 @@ export class StudyService {
           next_review_at: { [Op.lt]: overdueThreshold },
         },
         order: [['next_review_at', 'ASC']],
+        include: [{ model: LexicalEntry, as: 'lexicalEntry' }],
         limit: 20,
       }),
 
@@ -236,6 +247,7 @@ export class StudyService {
           },
         },
         order: [['next_review_at', 'ASC']],
+        include: [{ model: LexicalEntry, as: 'lexicalEntry' }],
         limit: 20,
       }),
 
@@ -248,6 +260,7 @@ export class StudyService {
           next_review_at: { [Op.gt]: now },
         },
         order: [['created_at', 'ASC']],
+        include: [{ model: LexicalEntry, as: 'lexicalEntry' }],
         limit: 10,
       }),
 
@@ -266,10 +279,10 @@ export class StudyService {
     ]);
 
     return { 
-      learning, 
-      overdue, 
-      due, 
-      newCards, 
+      learning: toFlashcardResponseList(learning), 
+      overdue: toFlashcardResponseList(overdue), 
+      due: toFlashcardResponseList(due), 
+      newCards: toFlashcardResponseList(newCards), 
       stats, 
       nextReviewAt: nextCard?.next_review_at ?? null 
     };

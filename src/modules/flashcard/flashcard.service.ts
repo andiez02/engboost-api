@@ -1,13 +1,16 @@
 import { Op } from 'sequelize';
-import { Flashcard, Folder } from '../../models';
+import { Flashcard, Folder, LexicalEntry } from '../../models';
 import { ApiError } from '../../utils/ApiError';
 import { updateSpacedRepetition } from '../../utils/srsEngine';
 import { folderService } from '../folder/folder.service';
+import { normalizeFlashcardInput } from './flashcard.utils';
+import { lexicalRepository } from '../lexical/lexical.repository';
+import { toFlashcardResponse, toFlashcardResponseList, FlashcardResponse } from './flashcard.mapper';
 
 interface FlashcardInput {
-  english: string;
-  vietnamese: string;
-  object?: string | null;
+  headword: string;
+  pos?: string | null;
+  senses: any[];
   image_url?: string | null;
 }
 
@@ -48,16 +51,32 @@ export class FlashcardService {
       targetFolderId = folderId;
     }
 
-    // Prepare bulk insert data
-    const flashcardData = flashcards.map((fc) => ({
-      english: fc.english,
-      vietnamese: fc.vietnamese,
-      object: fc.object || null,
-      image_url: fc.image_url || null,
-      folder_id: targetFolderId,
-      user_id: userId,
-      is_public: folder.is_public,
-    }));
+    // Prepare bulk insert data sequentially parsing via Shared Lexical Layer
+    const flashcardData = [];
+    for (const fc of flashcards) {
+      const normalized = normalizeFlashcardInput(fc);
+      
+      const lexicalEntryId = await lexicalRepository.upsertLexicalEntry({
+        headword: normalized.headword,
+        pos: normalized.pos ?? null,
+        senses: normalized.senses ?? null,
+        imageUrl: normalized.imageUrl ?? null
+      });
+
+      flashcardData.push({
+        english: normalized.headword,
+        vietnamese: normalized.translation,
+        pos: normalized.pos,
+        example: normalized.example,
+        definition: normalized.definition,
+        senses: normalized.senses, // dual written Phase 3.1
+        lexical_entry_id: lexicalEntryId,
+        image_url: normalized.imageUrl ?? null,
+        folder_id: targetFolderId,
+        user_id: userId,
+        is_public: folder.is_public,
+      });
+    }
 
     const created = await Flashcard.bulkCreate(flashcardData);
 
@@ -74,21 +93,25 @@ export class FlashcardService {
     };
   }
 
-  async getByFolder(folderId: string, skip = 0, limit = 100) {
-    return Flashcard.findAll({
+  async getByFolder(folderId: string, skip = 0, limit = 100): Promise<FlashcardResponse[]> {
+    const cards = await Flashcard.findAll({
       where: { folder_id: folderId },
+      include: [{ model: LexicalEntry, as: 'lexicalEntry' }],
       order: [['created_at', 'DESC']],
       offset: skip,
       limit,
     });
+    return toFlashcardResponseList(cards);
   }
 
-  async getById(flashcardId: string) {
-    const flashcard = await Flashcard.findByPk(flashcardId);
+  async getById(flashcardId: string): Promise<FlashcardResponse> {
+    const flashcard = await Flashcard.findByPk(flashcardId, {
+      include: [{ model: LexicalEntry, as: 'lexicalEntry' }]
+    });
     if (!flashcard) {
       throw new ApiError(404, 'Flashcard not found.');
     }
-    return flashcard;
+    return toFlashcardResponse(flashcard);
   }
 
   async delete(flashcardId: string, userId: string) {
@@ -109,7 +132,7 @@ export class FlashcardService {
     return flashcard;
   }
 
-  async reviewFlashcard(flashcardId: string, userId: string, rating: 0 | 1 | 2 | 3): Promise<Flashcard> {
+  async reviewFlashcard(flashcardId: string, userId: string, rating: 0 | 1 | 2 | 3): Promise<FlashcardResponse> {
     const flashcard = await Flashcard.findByPk(flashcardId);
     if (!flashcard) {
       throw new ApiError(404, 'Flashcard not found.');
@@ -130,10 +153,15 @@ export class FlashcardService {
     flashcard.last_reviewed_at = result.last_reviewed_at;
 
     await flashcard.save();
-    return flashcard;
+
+    // Re-fetch with LexicalEntry join for clean response
+    const updated = await Flashcard.findByPk(flashcardId, {
+      include: [{ model: LexicalEntry, as: 'lexicalEntry' }]
+    });
+    return toFlashcardResponse(updated!);
   }
 
-  async getDueCards(userId: string, folderId?: string): Promise<Flashcard[]> {
+  async getDueCards(userId: string, folderId?: string): Promise<FlashcardResponse[]> {
     const where: Record<string, unknown> = {
       user_id: userId,
       next_review_at: { [Op.lte]: new Date() },
@@ -143,7 +171,12 @@ export class FlashcardService {
       where.folder_id = folderId;
     }
 
-    return Flashcard.findAll({ where, order: [['next_review_at', 'ASC']] });
+    const cards = await Flashcard.findAll({ 
+      where, 
+      order: [['next_review_at', 'ASC']],
+      include: [{ model: LexicalEntry, as: 'lexicalEntry' }] 
+    });
+    return toFlashcardResponseList(cards);
   }
 }
 
