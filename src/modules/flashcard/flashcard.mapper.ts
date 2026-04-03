@@ -28,6 +28,10 @@ export interface FlashcardResponse {
   learningStep: number;
 
   createdAt: Date;
+
+  // Phase 2: Multi-Mode Learning System
+  studyMode?: 'recall' | 'multiple_choice' | 'typing' | 'image';
+  options?: string[]; // Only present for multiple_choice mode
 }
 
 // ─── Mapper ─────────────────────────────────────────────────────────────────

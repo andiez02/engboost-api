@@ -6,17 +6,19 @@ export interface ReviewLogAttributes {
   user_id: string;
   card_id: string;
   rating: number;
+  response_time_ms: number | null;
   created_at: Date;
   updated_at: Date | null;
 }
 
-export interface ReviewLogCreationAttributes extends Optional<ReviewLogAttributes, 'id' | 'created_at' | 'updated_at'> {}
+export interface ReviewLogCreationAttributes extends Optional<ReviewLogAttributes, 'id' | 'response_time_ms' | 'created_at' | 'updated_at'> {}
 
 class ReviewLog extends Model<ReviewLogAttributes, ReviewLogCreationAttributes> implements ReviewLogAttributes {
   declare id: string;
   declare user_id: string;
   declare card_id: string;
   declare rating: number;
+  declare response_time_ms: number | null;
   declare created_at: Date;
   declare updated_at: Date | null;
 }
@@ -41,6 +43,11 @@ ReviewLog.init(
     rating: {
       type: DataTypes.INTEGER,
       allowNull: false,
+    },
+    response_time_ms: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
     },
     created_at: {
       type: DataTypes.DATE,

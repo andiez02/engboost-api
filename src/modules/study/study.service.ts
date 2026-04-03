@@ -2,11 +2,13 @@ import { Op } from 'sequelize';
 import { startOfDay, isSameDay, differenceInDays } from 'date-fns';
 import { Flashcard, User, ReviewLog, LexicalEntry } from '../../models';
 import { ApiError } from '../../utils/ApiError';
-import { processLearningStep, LEARNING_STEPS } from '../../utils/srsEngine';
+import { processLearningStep } from '../../utils/srsEngine';
 import { achievementService } from '../gamification/achievement.service';
 import { xpService, xpForLevel, calculateLevel } from '../gamification/xp.service';
 import { challengeService } from '../gamification/challenge.service';
-import { toFlashcardResponse, toFlashcardResponseList, FlashcardResponse } from '../flashcard/flashcard.mapper';
+import { toFlashcardResponseList, FlashcardResponse } from '../flashcard/flashcard.mapper';
+import { modeSelectionService } from './modeSelection.service';
+import { mcqGeneratorService } from './mcqGenerator.service';
 
 export class StudyService {
   /** GET /study — due cards for a user, optionally filtered by folder */
@@ -27,8 +29,11 @@ export class StudyService {
   }
 
   /** POST /review — apply learning step / SM-2 rating and persist */
-  async reviewCard(cardId: string, userId: string, rating: 0 | 1 | 2 | 3): Promise<{
-    card: FlashcardResponse;
+  async reviewCard(cardId: string, userId: string, rating: 0 | 1 | 2 | 3, responseTimeMs: number | null = null): Promise<{
+    nextReviewAt: Date;
+    interval: number;
+    easeFactor: number;
+    state: 'new' | 'learning' | 'review' | 'relearning';
     unlockedAchievements: any[];
     xpGained: number;
     leveledUp: boolean;
@@ -37,7 +42,10 @@ export class StudyService {
     completedChallenges: any[];
     updatedChallenges: Array<{ id: string; progress: number; completed: boolean }>;
   }> {
-    const card = await Flashcard.findByPk(cardId);
+    // Eager load lexicalEntry to avoid re-fetch
+    const card = await Flashcard.findByPk(cardId, {
+      include: [{ model: LexicalEntry, as: 'lexicalEntry' }]
+    });
     if (!card) throw new ApiError(404, 'Flashcard not found.');
     if (card.user_id !== userId) throw new ApiError(403, 'Forbidden.');
 
@@ -65,6 +73,7 @@ export class StudyService {
       user_id: user.id,
       card_id: card.id,
       rating,
+      response_time_ms: responseTimeMs,
     });
 
     // Check for achievements
@@ -108,13 +117,19 @@ export class StudyService {
 
     await card.save();
 
-    // Re-fetch with LexicalEntry for clean response
-    const updatedCard = await Flashcard.findByPk(cardId, {
-      include: [{ model: LexicalEntry, as: 'lexicalEntry' }]
-    });
+    // Derive state from post-save SRS fields
+    const deriveState = (isLearning: boolean, repetition: number): 'new' | 'learning' | 'review' | 'relearning' => {
+      if (!isLearning && repetition > 0) return 'review';
+      if (isLearning && repetition > 0) return 'relearning';
+      if (isLearning && repetition === 0) return 'learning';
+      return 'new';
+    };
 
     return {
-      card: toFlashcardResponse(updatedCard!),
+      nextReviewAt: card.next_review_at,
+      interval: card.interval,
+      easeFactor: card.ease_factor,
+      state: deriveState(card.is_learning, card.repetition),
       unlockedAchievements,
       xpGained: xpResult.xpGained,
       leveledUp: xpResult.leveledUp,
@@ -278,11 +293,47 @@ export class StudyService {
       }),
     ]);
 
+    // Phase 2: Enrich each card with studyMode and options
+    const enrichCard = async (card: Flashcard): Promise<FlashcardResponse> => {
+      const base = toFlashcardResponseList([card])[0];
+      const lexicalEntry = (card as any).lexicalEntry as LexicalEntry | null;
+
+      // Select study mode
+      const studyMode = modeSelectionService.selectMode({
+        flashcard: card,
+        lexicalEntry,
+      });
+
+      // Generate MCQ options if mode is multiple_choice
+      let options: string[] | undefined;
+      if (studyMode === 'multiple_choice' && lexicalEntry) {
+        const mcqResult = await mcqGeneratorService.generateOptions({
+          flashcard: card,
+          lexicalEntry,
+          userId,
+          folderId,
+        });
+
+        if (mcqResult) {
+          options = mcqResult.options;
+        } else {
+          // Fallback to recall if MCQ generation fails
+          return { ...base, studyMode: 'recall' };
+        }
+      }
+
+      return {
+        ...base,
+        studyMode,
+        options,
+      };
+    };
+
     return { 
-      learning: toFlashcardResponseList(learning), 
-      overdue: toFlashcardResponseList(overdue), 
-      due: toFlashcardResponseList(due), 
-      newCards: toFlashcardResponseList(newCards), 
+      learning: await Promise.all(learning.map(enrichCard)), 
+      overdue: await Promise.all(overdue.map(enrichCard)), 
+      due: await Promise.all(due.map(enrichCard)), 
+      newCards: await Promise.all(newCards.map(enrichCard)), 
       stats, 
       nextReviewAt: nextCard?.next_review_at ?? null 
     };

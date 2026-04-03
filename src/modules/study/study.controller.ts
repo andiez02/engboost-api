@@ -14,8 +14,8 @@ export const getDueCards = async (req: AuthenticatedRequest, res: Response, next
 
 export const reviewCard = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const { cardId, rating } = req.body;
-    const result = await studyService.reviewCard(cardId, req.user!.id, rating);
+    const { cardId, rating, responseTimeMs } = req.body;
+    const result = await studyService.reviewCard(cardId, req.user!.id, rating, responseTimeMs ?? null);
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
