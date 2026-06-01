@@ -82,7 +82,6 @@ export class ChallengeService {
     const completedChallenges: Array<{ challenge: Challenge; rewardXp: number }> = [];
     const updatedChallenges: Array<{ id: string; progress: number; completed: boolean }> = [];
 
-    // Ensure user has all challenge rows
     await this.ensureUserChallenges(user.id);
 
     const userChallenges = await UserChallenge.findAll({
@@ -90,48 +89,53 @@ export class ChallengeService {
       include: [{ model: Challenge, as: 'challenge' }],
     });
 
+    const todayUTC = new Date();
+    todayUTC.setUTCHours(0, 0, 0, 0);
+
     for (const uc of userChallenges) {
       const challenge = (uc as any).challenge as Challenge;
       if (!challenge) continue;
 
-      let shouldIncrement = false;
+      // Reset daily challenges if last reset was before today
+      const isDaily = challenge.type === 'REVIEW_COUNT' || challenge.type === 'NO_AGAIN';
+      if (isDaily) {
+        const lastReset = uc.last_reset_at ? new Date(uc.last_reset_at) : null;
+        const resetNeeded = !lastReset || lastReset < todayUTC;
+        if (resetNeeded) {
+          uc.progress = 0;
+          uc.completed = false;
+          uc.completed_at = null;
+          uc.last_reset_at = todayUTC;
+        }
+      }
 
       switch (challenge.type) {
         case 'REVIEW_COUNT':
-          // Progress = total_reviewed (absolute)
-          uc.progress = user.total_reviewed;
-          shouldIncrement = true;
+          uc.progress += 1;
           break;
 
         case 'STREAK':
-          // Progress = current streak (absolute)
           uc.progress = user.streak;
-          shouldIncrement = true;
           break;
 
         case 'NO_AGAIN':
-          // Increment if rating > 0 (not Again), reset if rating === 0
           if (rating === 0) {
             uc.progress = 0;
           } else {
             uc.progress += 1;
           }
-          shouldIncrement = true;
           break;
       }
 
-      if (shouldIncrement && uc.progress >= challenge.target && !uc.completed) {
+      if (uc.progress >= challenge.target && !uc.completed) {
         uc.completed = true;
         uc.completed_at = new Date();
-
-        // Award bonus XP to user
         user.xp += challenge.reward_xp;
-
         completedChallenges.push({ challenge, rewardXp: challenge.reward_xp });
       }
 
       await uc.save();
-      
+
       updatedChallenges.push({
         id: challenge.id,
         progress: uc.progress,
@@ -152,9 +156,28 @@ export class ChallengeService {
       order: [['completed', 'ASC'], ['created_at', 'ASC']],
     });
 
-    return userChallenges.map((uc) => {
+    const todayUTC = new Date();
+    todayUTC.setUTCHours(0, 0, 0, 0);
+
+    const results = [];
+    for (const uc of userChallenges) {
       const challenge = (uc as any).challenge as Challenge;
-      return {
+      if (!challenge) continue;
+
+      // Reset daily challenges that haven't been reset today
+      const isDaily = challenge.type === 'REVIEW_COUNT' || challenge.type === 'NO_AGAIN';
+      if (isDaily) {
+        const lastReset = uc.last_reset_at ? new Date(uc.last_reset_at) : null;
+        if (!lastReset || lastReset < todayUTC) {
+          uc.progress = 0;
+          uc.completed = false;
+          uc.completed_at = null;
+          uc.last_reset_at = todayUTC;
+          await uc.save();
+        }
+      }
+
+      results.push({
         id: challenge.id,
         key: challenge.key,
         type: challenge.type,
@@ -166,8 +189,10 @@ export class ChallengeService {
         progress: uc.progress,
         completed: uc.completed,
         completedAt: uc.completed_at,
-      };
-    });
+      });
+    }
+
+    return results;
   }
 }
 

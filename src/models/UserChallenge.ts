@@ -8,11 +8,12 @@ export interface UserChallengeAttributes {
   progress: number;
   completed: boolean;
   completed_at: Date | null;
+  last_reset_at: Date | null;
   created_at: Date;
   updated_at: Date | null;
 }
 
-export interface UserChallengeCreationAttributes extends Optional<UserChallengeAttributes, 'id' | 'progress' | 'completed' | 'completed_at' | 'created_at' | 'updated_at'> {}
+export interface UserChallengeCreationAttributes extends Optional<UserChallengeAttributes, 'id' | 'progress' | 'completed' | 'completed_at' | 'last_reset_at' | 'created_at' | 'updated_at'> {}
 
 class UserChallenge extends Model<UserChallengeAttributes, UserChallengeCreationAttributes> implements UserChallengeAttributes {
   declare id: string;
@@ -21,6 +22,7 @@ class UserChallenge extends Model<UserChallengeAttributes, UserChallengeCreation
   declare progress: number;
   declare completed: boolean;
   declare completed_at: Date | null;
+  declare last_reset_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date | null;
 }
@@ -55,6 +57,11 @@ UserChallenge.init(
     completed_at: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    last_reset_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
     },
     created_at: {
       type: DataTypes.DATE,

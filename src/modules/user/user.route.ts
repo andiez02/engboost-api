@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import * as userController from './user.controller';
 import { authMiddleware } from '../../middlewares/authMiddleware';
+import { isAdmin } from '../../middlewares/isAdmin';
 import { validate } from '../../middlewares/validate';
 import { registerSchema, loginSchema, verifySchema, updateUserSchema } from './user.validation';
 
@@ -19,5 +20,12 @@ router.delete('/logout', userController.logout);
 router.get('/me', authMiddleware, userController.getMe);
 router.get('/achievements', authMiddleware, userController.getAchievements);
 router.put('/', authMiddleware, upload.single('avatar'), validate(updateUserSchema), userController.update);
+
+// Admin routes
+router.get('/admin/users', authMiddleware, isAdmin, userController.listUsers);
+router.get('/admin/users/analytics', authMiddleware, isAdmin, userController.getUserAnalytics);
+router.get('/admin/users/export', authMiddleware, isAdmin, userController.exportUsers);
+router.put('/admin/users/:id/role', authMiddleware, isAdmin, userController.updateRole);
+router.delete('/admin/users/:id', authMiddleware, isAdmin, userController.deleteUser);
 
 export default router;

@@ -19,11 +19,78 @@ export class PostService {
       content: data.content ?? null,
     });
 
+    await post.reload({
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'username', 'avatar'] },
+        { model: Folder, as: 'folder', attributes: ['id', 'title', 'flashcard_count', 'tags'] },
+      ],
+    });
+
     return post;
   }
 
-  async getFeed(query: { limit?: number; cursor?: string }, userId?: string) {
+  async getFeed(
+    query: {
+      limit?: number;
+      cursor?: string;
+      sort?: 'newest' | 'trending';
+      offset?: number;
+      tag?: string;
+    },
+    userId?: string
+  ) {
     const limit = query.limit ?? 10;
+    const sort = query.sort ?? 'newest';
+    const tag = query.tag?.trim();
+
+    const folderInclude: {
+      model: typeof Folder;
+      as: 'folder';
+      attributes: string[];
+      where?: Record<string, unknown>;
+      required?: boolean;
+    } = {
+      model: Folder,
+      as: 'folder',
+      attributes: ['id', 'title', 'flashcard_count', 'tags'],
+    };
+    if (tag) {
+      folderInclude.where = { tags: { [Op.contains]: [tag] } };
+      folderInclude.required = true;
+    }
+
+    const attachEngagement = async (posts: Post[]) => {
+      if (userId && posts.length > 0) {
+        const postIds = posts.map((p) => p.id);
+        const [likes, saves] = await Promise.all([
+          PostLike.findAll({ where: { user_id: userId, post_id: postIds } }),
+          PostSave.findAll({ where: { user_id: userId, post_id: postIds } }),
+        ]);
+        const likedSet = new Set(likes.map((l) => l.post_id));
+        const savedSet = new Set(saves.map((s) => s.post_id));
+        posts.forEach((post) => {
+          (post as any).dataValues.isLiked = likedSet.has(post.id);
+          (post as any).dataValues.isSaved = savedSet.has(post.id);
+        });
+      }
+    };
+
+    if (sort === 'trending') {
+      const offset = query.offset ?? 0;
+      const posts = await Post.findAll({
+        include: [{ model: User, as: 'user', attributes: ['id', 'username', 'avatar'] }, folderInclude],
+        order: [
+          [sequelize.literal('(like_count + save_count)'), 'DESC'],
+          ['created_at', 'DESC'],
+        ],
+        limit,
+        offset,
+        subQuery: false,
+      });
+      await attachEngagement(posts);
+      const nextOffset = posts.length === limit ? offset + limit : null;
+      return { posts, nextCursor: null as string | null, nextOffset };
+    }
 
     const where: Record<string, unknown> = {};
     if (query.cursor) {
@@ -32,35 +99,48 @@ export class PostService {
 
     const posts = await Post.findAll({
       where,
-      include: [
-        { model: User, as: 'user', attributes: ['id', 'username', 'avatar'] },
-        { model: Folder, as: 'folder', attributes: ['id', 'title', 'flashcard_count'] },
-      ],
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'avatar'] }, folderInclude],
       order: [['created_at', 'DESC']],
       limit,
+      subQuery: false,
     });
 
-    if (userId && posts.length > 0) {
-      const postIds = posts.map((p) => p.id);
-
-      const [likes, saves] = await Promise.all([
-        PostLike.findAll({ where: { user_id: userId, post_id: postIds } }),
-        PostSave.findAll({ where: { user_id: userId, post_id: postIds } }),
-      ]);
-
-      const likedSet = new Set(likes.map((l) => l.post_id));
-      const savedSet = new Set(saves.map((s) => s.post_id));
-
-      posts.forEach((post) => {
-        (post as any).dataValues.isLiked = likedSet.has(post.id);
-        (post as any).dataValues.isSaved = savedSet.has(post.id);
-      });
-    }
+    await attachEngagement(posts);
 
     const nextCursor =
       posts.length === limit ? posts[posts.length - 1].created_at.toISOString() : null;
 
-    return { posts, nextCursor };
+    return { posts, nextCursor, nextOffset: null as number | null };
+  }
+
+  async getPostById(postId: string, userId?: string) {
+    const post = await Post.findByPk(postId, {
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'username', 'avatar'] },
+        { model: Folder, as: 'folder', attributes: ['id', 'title', 'flashcard_count', 'tags'] },
+      ],
+    });
+    if (!post) {
+      throw new ApiError(404, 'Post not found.');
+    }
+
+    const previewFlashcards = await Flashcard.findAll({
+      where: { folder_id: post.folder_id },
+      attributes: ['id', 'english', 'vietnamese', 'pos', 'image_url'],
+      limit: 8,
+      order: [['created_at', 'ASC']],
+    });
+
+    if (userId) {
+      const [like, save] = await Promise.all([
+        PostLike.findOne({ where: { user_id: userId, post_id: postId } }),
+        PostSave.findOne({ where: { user_id: userId, post_id: postId } }),
+      ]);
+      (post as any).dataValues.isLiked = !!like;
+      (post as any).dataValues.isSaved = !!save;
+    }
+
+    return { post, previewFlashcards };
   }
 
   async likePost(postId: string, userId: string) {

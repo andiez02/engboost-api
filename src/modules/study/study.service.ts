@@ -183,7 +183,7 @@ export class StudyService {
     const xpNext = xpForLevel(level + 1);
     const xpCurrent = xpForLevel(level);
 
-    // Get challenges
+    // Get challenges with real progress from DB
     const challenges = await challengeService.getUserChallenges(userId);
 
     return {

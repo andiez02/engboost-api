@@ -14,10 +14,27 @@ export const createPost = async (req: AuthenticatedRequest, res: Response, next:
 
 export const getFeed = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const cursor = req.query.cursor ? (req.query.cursor as string) : undefined;
-    const { posts, nextCursor } = await postService.getFeed({ limit, cursor }, req.user?.id);
-    res.status(200).json({ success: true, data: posts, nextCursor });
+    const q = req.query as Record<string, string | undefined>;
+    const limit = q.limit ? Number(q.limit) : undefined;
+    const cursor = q.cursor;
+    const sort = q.sort as 'newest' | 'trending' | undefined;
+    const offset = q.offset !== undefined ? Number(q.offset) : undefined;
+    const tag = q.tag;
+    const { posts, nextCursor, nextOffset } = await postService.getFeed(
+      { limit, cursor, sort, offset, tag },
+      req.user?.id
+    );
+    res.status(200).json({ success: true, data: posts, nextCursor, nextOffset });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPostById = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params as { id: string };
+    const result = await postService.getPostById(id, req.user?.id);
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

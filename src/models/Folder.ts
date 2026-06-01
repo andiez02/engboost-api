@@ -8,11 +8,12 @@ interface FolderAttributes {
   flashcard_count: number;
   is_public: boolean;
   required_level: number;
+  tags: string[];
   created_at: Date;
   updated_at: Date | null;
 }
 
-interface FolderCreationAttributes extends Optional<FolderAttributes, 'id' | 'flashcard_count' | 'is_public' | 'required_level' | 'created_at' | 'updated_at'> {}
+interface FolderCreationAttributes extends Optional<FolderAttributes, 'id' | 'flashcard_count' | 'is_public' | 'required_level' | 'tags' | 'created_at' | 'updated_at'> {}
 
 class Folder extends Model<FolderAttributes, FolderCreationAttributes> implements FolderAttributes {
   declare id: string;
@@ -21,6 +22,7 @@ class Folder extends Model<FolderAttributes, FolderCreationAttributes> implement
   declare flashcard_count: number;
   declare is_public: boolean;
   declare required_level: number;
+  declare tags: string[];
   declare created_at: Date;
   declare updated_at: Date | null;
 }
@@ -63,6 +65,11 @@ Folder.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 1,
+    },
+    tags: {
+      type: DataTypes.ARRAY(DataTypes.STRING(50)),
+      allowNull: false,
+      defaultValue: [],
     },
     created_at: {
       type: DataTypes.DATE,

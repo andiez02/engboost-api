@@ -141,6 +141,7 @@ export class FlashcardService {
       throw new ApiError(403, 'You do not have permission to review this flashcard.');
     }
 
+    // Update when user click rating button 
     const result = updateSpacedRepetition(
       { repetition: flashcard.repetition, interval: flashcard.interval, ease_factor: flashcard.ease_factor },
       rating

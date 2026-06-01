@@ -36,6 +36,9 @@ export const env = {
 
   // AI Microservice
   AI_MICROSERVICE_URL: process.env.AI_MICROSERVICE_URL || 'http://localhost:5001',
+
+  // Google Gemini API
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
 };
 
 export const isProduction = env.NODE_ENV === 'production';

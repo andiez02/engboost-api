@@ -41,6 +41,7 @@ export class XpService {
     const oldLevel = user.level;
 
     user.xp += xpGained;
+    user.weekly_xp = Math.max(0, (user.weekly_xp ?? 0) + xpGained);
     user.level = calculateLevel(user.xp);
 
     const leveledUp = user.level > oldLevel;

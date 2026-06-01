@@ -15,12 +15,13 @@ interface UserAttributes {
   daily_goal: number;
   total_reviewed: number;
   xp: number;
+  weekly_xp: number;
   level: number;
   created_at: Date;
   updated_at: Date | null;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'username' | 'avatar' | 'role' | 'is_active' | 'verify_token' | 'streak' | 'last_study_date' | 'daily_goal' | 'total_reviewed' | 'xp' | 'level' | 'created_at' | 'updated_at'> {}
+interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'username' | 'avatar' | 'role' | 'is_active' | 'verify_token' | 'streak' | 'last_study_date' | 'daily_goal' | 'total_reviewed' | 'xp' | 'weekly_xp' | 'level' | 'created_at' | 'updated_at'> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -36,6 +37,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   declare daily_goal: number;
   declare total_reviewed: number;
   declare xp: number;
+  declare weekly_xp: number;
   declare level: number;
   declare created_at: Date;
   declare updated_at: Date | null;
@@ -108,6 +110,11 @@ User.init(
       defaultValue: 0,
     },
     xp: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    weekly_xp: {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,

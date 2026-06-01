@@ -12,6 +12,7 @@ import Post from './Post';
 import PostLike from './PostLike';
 import PostSave from './PostSave';
 import LexicalEntry from './LexicalEntry';
+import Notification from './Notification';
 
 // ==================== Associations ====================
 
@@ -22,6 +23,10 @@ Folder.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 // User → Flashcards (1:N)
 User.hasMany(Flashcard, { foreignKey: 'user_id', as: 'flashcards' });
 Flashcard.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// User → Notifications (1:N)
+User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
+Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 // Folder → Flashcards (1:N)
 Folder.hasMany(Flashcard, { foreignKey: 'folder_id', as: 'flashcards' });
@@ -87,4 +92,4 @@ PostSave.belongsTo(Post, { foreignKey: 'post_id' });
 User.hasMany(PostSave, { foreignKey: 'user_id', as: 'postSaves' });
 PostSave.belongsTo(User, { foreignKey: 'user_id' });
 
-export { User, Folder, Flashcard, Course, UserCourse, Achievement, UserAchievement, ReviewLog, Challenge, UserChallenge, Post, PostLike, PostSave, LexicalEntry };
+export { User, Folder, Flashcard, Course, UserCourse, Achievement, UserAchievement, ReviewLog, Challenge, UserChallenge, Post, PostLike, PostSave, LexicalEntry, Notification };

@@ -1,30 +1,47 @@
+import { Op } from 'sequelize';
 import { Folder, Flashcard } from '../../models';
 import { ApiError } from '../../utils/ApiError';
 
 export class FolderService {
-  async create(data: { title: string; is_public?: boolean }, userId: string) {
-    // Check duplicate title for this user
-    const existing = await Folder.findOne({
-      where: { title: data.title, user_id: userId },
-    });
-    if (existing) {
-      throw new ApiError(400, `Folder with title '${data.title}' already exists.`);
-    }
+  async create(data: { title: string; is_public?: boolean; tags?: string[] }, userId: string) {
+    const existing = await Folder.findOne({ where: { title: data.title, user_id: userId } });
+    if (existing) throw new ApiError(400, `Folder with title '${data.title}' already exists.`);
 
     const folder = await Folder.create({
       title: data.title,
       user_id: userId,
       is_public: data.is_public ?? false,
+      tags: data.tags ?? [],
     });
 
     return folder;
   }
 
   async getByUser(userId: string) {
-    return Folder.findAll({
+    const folders = await Folder.findAll({
       where: { user_id: userId },
       order: [['created_at', 'DESC']],
     });
+
+    const now = new Date();
+    const dueCountsRaw = await Flashcard.findAll({
+      where: {
+        user_id: userId,
+        next_review_at: { [Op.lte]: now },
+      },
+      attributes: ['folder_id'],
+    });
+
+    const dueByFolder: Record<string, number> = {};
+    for (const fc of dueCountsRaw) {
+      const fid = fc.folder_id;
+      dueByFolder[fid] = (dueByFolder[fid] ?? 0) + 1;
+    }
+
+    return folders.map((f) => ({
+      ...f.toJSON(),
+      due_count: dueByFolder[f.id] ?? 0,
+    }));
   }
 
   async getById(folderId: string) {
@@ -35,7 +52,7 @@ export class FolderService {
     return folder;
   }
 
-  async update(folderId: string, userId: string, updateData: { title?: string; is_public?: boolean }) {
+  async update(folderId: string, userId: string, updateData: { title?: string; is_public?: boolean; tags?: string[] }) {
     const folder = await Folder.findByPk(folderId);
     if (!folder) {
       throw new ApiError(404, 'Folder not found.');

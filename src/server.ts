@@ -20,6 +20,13 @@ import deckRoutes from './modules/deck/deck.route';
 import postRoutes from './modules/post/post.route';
 import exploreRoutes from './modules/explore/explore.route';
 import adminFolderRoutes from './modules/adminFolder/adminFolder.route';
+import leaderboardRouter from './modules/leaderboard/leaderboard.route';
+import notificationRoutes from './modules/notification/notification.route';
+import chatbotRoutes from './modules/chatbot/chatbot.route';
+
+// Import jobs
+import { startWeeklyResetJob } from './jobs/weeklyReset.job';
+import { startStreakWarningJob } from './jobs/streakWarning.job';
 
 const app = express();
 
@@ -57,6 +64,9 @@ app.use('/api/decks', deckRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/explore', exploreRoutes);
 app.use('/api/admin/folders', adminFolderRoutes);
+app.use('/api/leaderboard', leaderboardRouter);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 
 // ==================== Error Handler  ====================
 app.use(errorHandler);
@@ -91,6 +101,12 @@ const startServer = async () => {
       console.log(`🚀 Server running at http://${host}:${port}`);
       console.log(`📦 Environment: ${env.NODE_ENV}`);
     });
+
+    // Start cron jobs
+    startWeeklyResetJob();
+    console.log('✅ Weekly reset cron job started.');
+    startStreakWarningJob();
+    console.log('✅ Streak warning cron job started.');
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     process.exit(1);

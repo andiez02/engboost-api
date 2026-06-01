@@ -49,8 +49,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
 export const logout = async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+    const clearOptions = {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? ('none' as const) : ('lax' as const),
+    };
+    res.clearCookie('accessToken', clearOptions);
+    res.clearCookie('refreshToken', clearOptions);
     res.status(200).json({ success: true, message: 'Logged out successfully.' });
   } catch (error) {
     next(error);
@@ -111,6 +116,106 @@ export const update = async (req: AuthenticatedRequest, res: Response, next: Nex
     const avatarFile = (req as any).file as Express.Multer.File | undefined;
     const result = await userService.update(req.user!.id, req.body, avatarFile);
     res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── Admin controllers ────────────────────────────────────────────────────────
+
+export const listUsers = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const search = (req.query.search as string) || '';
+    const role = (req.query.role as string) || '';
+    const isActiveParam = req.query.isActive as string | undefined;
+    const minLevelParam = req.query.minLevel as string | undefined;
+    const inactiveDaysParam = req.query.inactiveDays as string | undefined;
+    const sortBy = (req.query.sortBy as string) || 'createdAt';
+    const sortOrder = (req.query.sortOrder as string) || 'desc';
+
+    const isActive =
+      isActiveParam === undefined || isActiveParam === ''
+        ? undefined
+        : isActiveParam === 'true';
+    const minLevel = minLevelParam ? parseInt(minLevelParam, 10) : undefined;
+    const inactiveDays = inactiveDaysParam ? parseInt(inactiveDaysParam, 10) : undefined;
+
+    const result = await userService.listUsers(page, limit, {
+      search,
+      role,
+      isActive,
+      minLevel,
+      inactiveDays,
+      sortBy,
+      sortOrder,
+    });
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const exportUsers = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const search = (req.query.search as string) || '';
+    const role = (req.query.role as string) || '';
+    const isActiveParam = req.query.isActive as string | undefined;
+    const minLevelParam = req.query.minLevel as string | undefined;
+    const inactiveDaysParam = req.query.inactiveDays as string | undefined;
+    const sortBy = (req.query.sortBy as string) || 'createdAt';
+    const sortOrder = (req.query.sortOrder as string) || 'desc';
+
+    const isActive =
+      isActiveParam === undefined || isActiveParam === ''
+        ? undefined
+        : isActiveParam === 'true';
+    const minLevel = minLevelParam ? parseInt(minLevelParam, 10) : undefined;
+    const inactiveDays = inactiveDaysParam ? parseInt(inactiveDaysParam, 10) : undefined;
+
+    const { buffer, filename } = await userService.exportUsers({
+      search,
+      role,
+      isActive,
+      minLevel,
+      inactiveDays,
+      sortBy,
+      sortOrder,
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(buffer);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getUserAnalytics = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const rangeParam = parseInt((req.query.range as string) || '30', 10);
+    const range = [7, 30, 90].includes(rangeParam) ? rangeParam : 30;
+    const result = await userService.getUserAnalytics(range);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateRole = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const result = await userService.updateRole(req.params.id as string, req.body.role);
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteUser = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const result = await userService.deleteUser(req.params.id as string);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     next(error);
   }
